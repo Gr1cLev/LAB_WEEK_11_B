@@ -1,0 +1,135 @@
+Richie Giansanto - 00000076847
+
+================================================================================
+ANSWERS - LAB WEEK 11 - Part 3 Tutorial
+================================================================================
+
+Question 1:
+When a user takes a picture, that picture is stored in a path based on the given
+URI. In which part of the code handles this?
+
+Answer:
+The code that handles storing the picture in a path based on the given URI is in
+the MainActivity.kt file:
+
+    takePictureLauncher =
+        registerForActivityResult(ActivityResultContracts.TakePicture()) {
+            providerFileManager.insertImageToStore(photoInfo)
+        }
+
+And in the openImageCapture() function:
+
+    private fun openImageCapture() {
+        photoInfo =
+            providerFileManager.generatePhotoUri(System.currentTimeMillis())
+        photoInfo?.uri?.let { takePictureLauncher.launch(it) }
+    }
+
+The ProviderFileManager.kt handles the URI generation and storage:
+
+    fun generatePhotoUri(time: Long): FileInfo {
+        val name = "img_$time.jpg"
+        val file = File(
+            context.getExternalFilesDir(fileHelper.getPicturesFolder()),
+            name
+        )
+        return FileInfo(
+            fileHelper.getUriFromFile(file),
+            file,
+            name,
+            fileHelper.getPicturesFolder(),
+            "image/jpeg"
+        )
+    }
+
+================================================================================
+
+Question 2:
+In your FileInfo.kt, there are 5 attributes. On the first attribute, what does
+the URI refer to? And on the fourth attribute, what does relativePath refer to?
+
+Answer:
+
+First attribute (uri: Uri):
+The URI refers to a content URI that points to the file location. This URI is
+generated using FileProvider and serves as a secure reference to access the file.
+It's a content:// URI that allows the camera app to write the captured image to
+the specified location without requiring direct file system access. The URI is
+created through FileProvider.getUriForFile() in FileHelper.kt.
+
+Fourth attribute (relativePath: String):
+The relativePath refers to the directory path relative to the external storage
+root where the file should be stored. For images, this is typically
+"Pictures" (Environment.DIRECTORY_PICTURES), and for videos, it's "Movies"
+(Environment.DIRECTORY_MOVIES). On Android Q (API 29) and above, this relative
+path is used with MediaStore to specify where the file should be saved in the
+shared storage, making it accessible through the MediaStore content provider.
+
+================================================================================
+
+Question 3 [BONUS]:
+Explain the chronological order from when a user takes a picture until the file
+is stored in the MediaStore.
+
+Answer:
+
+The chronological order is as follows:
+
+1. USER CLICKS PHOTO BUTTON
+   - User clicks the photo button in MainActivity
+   - The onClick listener triggers isCapturingVideo = false
+   - checkStoragePermission() is called with openImageCapture() as callback
+
+2. PERMISSION CHECK
+   - For Android versions below Q (API 29), WRITE_EXTERNAL_STORAGE permission
+     is checked
+   - If permission is granted, openImageCapture() is executed
+   - If not granted, permission request dialog is shown
+
+3. URI GENERATION
+   - openImageCapture() calls providerFileManager.generatePhotoUri()
+   - A timestamp is generated using System.currentTimeMillis()
+   - A filename is created: "img_[timestamp].jpg"
+   - A File object is created in the app's external files directory
+     (Pictures folder)
+   - FileProvider generates a content URI for this file location
+   - A FileInfo object is created containing: uri, file, name, relativePath,
+     and mimeType
+
+4. CAMERA LAUNCH
+   - The generated URI is passed to takePictureLauncher.launch(it)
+   - ActivityResultContracts.TakePicture() is triggered
+   - The system camera app is launched with the URI as the destination
+
+5. USER TAKES PICTURE
+   - User takes a picture using the camera app
+   - The camera app writes the image data to the URI location
+   - The camera app closes and returns a result
+
+6. RESULT CALLBACK
+   - takePictureLauncher's callback is triggered
+   - providerFileManager.insertImageToStore(photoInfo) is called
+
+7. MEDIASTORE INSERTION
+   - insertImageToStore() calls insertToStore() with:
+     * The FileInfo object
+     * MediaStore content URI (from MediaContentHelper)
+     * ContentValues containing metadata (name, relativePath, mimeType)
+   
+8. ASYNC FILE COPY (executed in background thread)
+   - contentResolver.insert() creates a new entry in MediaStore
+   - Returns a new MediaStore URI for the inserted entry
+   - An InputStream is opened from the temporary file URI
+   - An OutputStream is opened to the MediaStore URI
+   - IOUtils.copy() copies the image data from temp location to MediaStore
+   - The file is now accessible through MediaStore to all apps
+
+9. COMPLETION
+   - The image is now stored in MediaStore
+   - The file is accessible through the MediaStore content provider
+   - Other apps (Gallery, Photos, etc.) can now access and display the image
+
+The process uses FileProvider for secure file access and MediaStore for
+shared storage access, following Android's scoped storage best practices.
+
+================================================================================
